@@ -1,6 +1,8 @@
 export const socketKeys = {
-  NEW_MESSAGE: "NEW_MESSAGE",
-  START_TYPING: "START_TYPING",
-  STOP_TYPING: "STOP_TYPING",
-  ONLINE_USERS: "ONLINE_USERS",
+ USER_JOINED: "user-joined",
+ CONNECTION_ERROR:"connect_error",
+ UPDATE_USERS:"update-users",
+ MESSAGE:"message",
+ TYPING:"typing",
+ STOP_TYPING:"stop-typing",
 };

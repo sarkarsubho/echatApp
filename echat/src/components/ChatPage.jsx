@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from "react";
-import { io } from "socket.io-client";
 import "./ChatPage.css";
 import { v4 as uuidv4 } from "uuid";
+import { io } from "socket.io-client";
+import { useEffect, useState, useRef } from "react";
+import { socketKeys } from "../constants/socketKeys";
 
 const socket = io("http://localhost:8080", {
   transports: ["websocket", "polling"],
@@ -13,7 +14,7 @@ socket.on("connect", () => {
   console.log("Connected to server:", socket.id);
 });
 
-socket.on("connect_error", (err) => {
+socket.on(socketKeys.CONNECTION_ERROR, (err) => {
   console.error("Connection error:", err.message);
 });
 
@@ -30,34 +31,37 @@ export default function ChatPage() {
   const [showModal, setShowModal] = useState(!localStorage.getItem("username"));
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
-    //   localStorage.setItem("uuid", uuid);
-    //   if (username) {
-    //     socket.emit("user-joined", { uuid, username });
-    //   }
+  const [iamTyping, setIamTyping] = useState(false);
+  const typingTimeout = useRef(null);
 
-    socket.on("update-users", (users) => {
-      users = users.filter;
+  useEffect(() => {
+    localStorage.setItem("uuid", uuid);
+    if (username) {
+      socket.emit(socketKeys.USER_JOINED, { uuid, username });
+    }
+
+    socket.on(socketKeys.UPDATE_USERS, (users) => {
+      delete users[uuid];
       setOnlineUsers(users);
     });
 
-    socket.on("message", ({ sender, message }) => {
+    socket.on(socketKeys.MESSAGE, ({ sender, message }) => {
       setMessages((prev) => [...prev, { sender, message }]);
     });
 
-    socket.on("typing", (sender) => {
+    socket.on(socketKeys.TYPING, (sender) => {
       setTypingUser(sender);
     });
 
-    socket.on("stop-typing", () => {
+    socket.on(socketKeys.STOP_TYPING, () => {
       setTypingUser(null);
     });
 
     return () => {
-      socket.off("message");
-      socket.off("update-users");
-      socket.off("typing");
-      socket.off("stop-typing");
+      socket.off(socketKeys.MESSAGE);
+      socket.off(socketKeys.UPDATE_USERS);
+      socket.off(socketKeys.TYPING);
+      socket.off(socketKeys.STOP_TYPING);
     };
   }, []);
 
@@ -66,16 +70,39 @@ export default function ChatPage() {
       localStorage.setItem("uuid", uuid);
       localStorage.setItem("username", username);
       setShowModal(false);
-      socket.emit("user-joined", { uuid, username });
+      socket.emit(socketKeys.USER_JOINED, { uuid, username });
     }
   };
+
+  const handleChangeMessage = (value) => {
+    setInput(value)
+    if (!iamTyping) {
+      socket.emit(socketKeys.TYPING, { sender: uuid, receiver })
+      setIamTyping(true);
+    }
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      socket.emit(socketKeys.STOP_TYPING, { sender: uuid, receiver })
+      setIamTyping(false);
+    }, [2000]);
+  };
+
+  const handleSendMessage = () => {
+    socket.emit(socketKeys.MESSAGE, { sender: uuid, receiver, message: input });
+    setMessages((prev) => [...prev, { sender: uuid, message: input }]);
+    setInput("");
+  }
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, typingUser])
 
   return (
     <div className="chat-app">
       {showModal && (
         <div className="modal">
           <div className="modal-content">
-            <h3>Enter Your Name</h3>
+            <h3 className="text-green">Enter Your Name</h3>
             <input
               type="text"
               value={username}
@@ -89,49 +116,82 @@ export default function ChatPage() {
       <div className="sidebar">
         <h3>Online Users</h3>
         {Object.entries(onlineUsers).map(([id, user]) => (
-          <div key={id} onClick={() => setReceiver(id)} className="user">
-            {user.name} {user.online ? "🟢" : "🔴"}{" "}
-            {id === receiver && "(Chatting)"}
+          <div key={id} onClick={() => setReceiver(id)} className={`user ${id === receiver && "selectedUser"}`}>
+            <strong> {user.name}</strong>
+            {user.online ? "🟢" : "🔴"}{" "}
+            <strong className="text-green">
+              {!receiver && id === typingUser && "Typing..."}
+              {receiver && receiver !== typingUser && id === typingUser && "Typing..."}
+            </strong>
           </div>
         ))}
       </div>
-      <div className="chat-container">
+      {receiver ? <div className="chat-container">
         <div className="chat-header">
-          {receiver ? onlineUsers[receiver]?.name : "Select a user"}
+          <div className="user-info">
+            <div className="profile-icon">
+              {onlineUsers[receiver]?.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="username">{onlineUsers[receiver]?.name}</div>
+              <div className={`status ${onlineUsers[receiver]?.online ? "online" : "offline"}`}>
+                {onlineUsers[receiver]?.online ? "Online" : "Offline"}
+              </div>
+            </div>
+          </div>
+
         </div>
         <div className="messages">
-          {messages.map((msg, index) => (
+          {receiver && messages.map((msg, index) => (
             <div
               key={index}
-              className={`message ${
-                msg.sender === username ? "sent" : "received"
-              }`}
+              className={`message ${msg.sender === uuid ? "sent" : "received"
+                }`}
             >
-              <strong>{msg.sender}:</strong> {msg.message}
+              <strong>{onlineUsers[msg.sender] ? onlineUsers[msg.sender]?.name : "You"}:</strong>
+              <br />
+              {msg.message}
             </div>
           ))}
-          {typingUser && (
-            <div className="typing-indicator">{typingUser} is typing...</div>
+          {receiver && receiver === typingUser && (
+            <div className="typing-indicator">{onlineUsers[typingUser]?.name} is typing...</div>
           )}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef}></div>
         </div>
         <div className="chat-input">
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleChangeMessage(e.target.value)}
             placeholder="Type a message..."
           />
           <button
-            onClick={() =>
-              socket.emit("message", { sender: uuid, receiver, message: input })
-            }
+            onClick={handleSendMessage}
             disabled={!receiver}
           >
             Send
           </button>
         </div>
-      </div>
+      </div> :
+        <div className="chat-container">
+          <div className="chat-header"></div>
+          <div className="messages notSelectedMsg">
+            <h3>Please Select a user to Start chatting.</h3>
+          </div>
+          <div className="chat-input">
+            <input
+              type="text"
+              disabled={true}
+              placeholder="Type a message..."
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={true}
+            >
+              Send
+            </button>
+          </div>
+        </div>}
     </div>
   );
 }
