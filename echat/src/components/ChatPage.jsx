@@ -4,7 +4,7 @@ import { io } from "socket.io-client";
 import { useEffect, useState, useRef } from "react";
 import { socketKeys } from "../constants/socketKeys";
 
-const socket = io("http://localhost:8080", {
+const socket = io("https://echat-app-xi.vercel.app/", {
   transports: ["websocket", "polling"],
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
