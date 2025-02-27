@@ -75,7 +75,7 @@ export default function ChatPage() {
   };
 
   const handleChangeMessage = (value) => {
-    setInput(value)
+    setInput(value.trim());
     if (!iamTyping) {
       socket.emit(socketKeys.TYPING, { sender: uuid, receiver })
       setIamTyping(true);
@@ -88,9 +88,11 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = () => {
-    socket.emit(socketKeys.MESSAGE, { sender: uuid, receiver, message: input });
-    setMessages((prev) => [...prev, { sender: uuid, message: input }]);
-    setInput("");
+    if (input.trim()) {
+      socket.emit(socketKeys.MESSAGE, { sender: uuid, receiver, message: input });
+      setMessages((prev) => [...prev, { sender: uuid, message: input }]);
+      setInput("");
+    }
   }
 
   useEffect(() => {
@@ -114,17 +116,34 @@ export default function ChatPage() {
         </div>
       )}
       <div className="sidebar">
-        <h3>Online Users</h3>
-        {Object.entries(onlineUsers).map(([id, user]) => (
-          <div key={id} onClick={() => setReceiver(id)} className={`user ${id === receiver && "selectedUser"}`}>
-            <strong> {user.name}</strong>
-            {user.online ? "🟢" : "🔴"}{" "}
-            <strong className="text-green">
-              {!receiver && id === typingUser && "Typing..."}
-              {receiver && receiver !== typingUser && id === typingUser && "Typing..."}
-            </strong>
+        <div className="onlineUsers">
+          <h3>Online Users</h3>
+          <hr />
+          {Object.entries(onlineUsers).map(([id, user]) => (
+            <div key={id} onClick={() => setReceiver(id)} className={`user ${id === receiver && "selectedUser"}`}>
+              <strong> {user.name}</strong>
+              {user.online ? "🟢" : "🔴"}{" "}
+              <strong className="text-green">
+                {!receiver && id === typingUser && "Typing..."}
+                {receiver && receiver !== typingUser && id === typingUser && "Typing..."}
+              </strong>
+            </div>
+          ))}
+        </div>
+        <div className="profileDetails">
+          <div className="user-info ">
+            <div className="profile-icon">
+              {username.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="username">{username}</div>
+              <div className={`status online uuid`}>
+                {uuid}
+              </div>
+            </div>
           </div>
-        ))}
+        </div>
+
       </div>
       {receiver ? <div className="chat-container">
         <div className="chat-header">
