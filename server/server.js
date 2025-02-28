@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(cors(corsOption));
 
 const users = {};
-
+app.set("io", io);
 io.on("connection", (socket) => {
   console.log(`A user connected: ${socket.id}`);
 
